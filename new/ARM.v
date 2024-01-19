@@ -3,19 +3,22 @@ module ARM(
     input Reset,
     input [31:0] Instr,
     input [31:0] ReadData,
-    input Cache_Stall,
+    input current_state,
 
     output MemWriteM,
+    output MemWriteW,
     output [31:0] PC,
     output [31:0] ALUResultM,
     output [31:0] WriteData,
-    output cpu_req_valid
+    output cpu_req_valid,
+    output [31:0] ALUOutW
 );
 wire done;
 wire MWrite;
 
-
-
+    wire Cache_Stall;
+    assign Cache_Stall=!current_state;
+        
 
     wire PCSD;
     wire RegWD;
@@ -83,7 +86,6 @@ assign ReadDataM=ReadData;
 wire [31:0] ALUOutM;
 assign ALUOutM=ALUResultM;
 wire [31:0] ReadDataW;
-wire [31:0] ALUOutW;
 wire [3:0] WA3W;
 wire  PCSrcW;
 wire  RegWriteW;
@@ -122,6 +124,7 @@ wire [3:0] RA2D;
 wire Float_start;////////////////浮点�?
 assign RA2D= (Float_start)? InstrD[3:0]:RegSrcD[2]==0 ? InstrD[3:0]:////////////////浮点�?
             InstrD[15:12];
+
 
 wire [3:0] A3;
 
@@ -191,7 +194,7 @@ ProgramCounter ProgramCounter1(
     StallF,
     Mstall,
     Cache_Stall,
-
+    
     PC,
     PC_Plus_4F    
 
@@ -280,6 +283,7 @@ RegisterFile RegisterFile1(
             R15,
             MvalidW,
             Float_startW,////////////////浮点�?
+            
         
             RD1,
             RD2
@@ -321,6 +325,7 @@ State_register1 State_register1(
            StallD,
            FlashD,
            Mstall,
+           Cache_Stall,
          
            
            InstrD
@@ -347,6 +352,7 @@ State_register2 State_register2(
            StartD,
            MCycleOpD,
            Mstall,
+           Cache_Stall,
            MWA3D,
            Float_start,
            Floatout,
@@ -413,6 +419,7 @@ State_register3 State_register3(
            ALUFlagsE,
            Float_startE,
            FloatoutE,
+           Cache_Stall,
            
                               
            WriteDataM,
@@ -443,6 +450,8 @@ State_register4 State_register4(
     WResultM,
     Float_startM,
     FloatoutM,    
+    Cache_Stall,
+    MemWriteM,
 
     ReadDataW,
     ALUOutW,
@@ -454,7 +463,8 @@ State_register4 State_register4(
     MWA3W,
     WResultW,
     Float_startW,
-    FloatoutW        
+    FloatoutW ,
+    MemWriteW       
     );
 HazardUnit HazardUnit(
         RA1D,
@@ -491,14 +501,14 @@ HazardUnit HazardUnit(
             Floatout//////////这个怎么写到寄存器里
         );  
         
+
+        
         reg cpu_req_valid1;
         assign cpu_req_valid=cpu_req_valid1;
         always @(*) begin
-            if (Instr[27:26]==2'b10)
+            if (MemtoRegM || MemtoRegW ||MemWriteM)
                 cpu_req_valid1=1'b1;
-            else if (!(Mstall||StallF))
-                cpu_req_valid1=1'b1;
-            else 
+            else
                 cpu_req_valid1=1'b0;
         end
         

@@ -24,14 +24,14 @@ module associative_cache(
 input CLK,
 input RESET,
 //between CPU and cache
-input [31:0]PC,
 input [31:0]cpu_req_addr, //ALUResult
 input cpu_req_valid,
 input cpu_req_rw,
 input [31:0]cpu_data_write, //store instruction, WriteData
 output [31:0]cpu_data_read, // INSTR_MEM[PC[8:2]]
 output cpu_ready,
-output Cache_Stall,
+output current_state,
+input [31:0] ALUOutW,
 
 //between cache and mem
 output  [31:0]mem_req_addr, //addr mem achieve
@@ -41,7 +41,10 @@ output  [31:0]mem_data_write, //the data need to be writebacked to the mem
 input [31:0]mem_data_read, //the read data from mem
 input mem_ready //mem done the work, i.e. mem aviliable when mem_ready=0
     );
-    reg [31:0]cpu_data_read1; // INSTR_MEM[PC[8:2]]
+    
+    
+    
+    reg [31:0]cpu_data_read1; 
     reg cpu_ready1;
     assign cpu_data_read=cpu_data_read1;
     assign cpu_ready=cpu_ready1;
@@ -57,7 +60,9 @@ input mem_ready //mem done the work, i.e. mem aviliable when mem_ready=0
     
     reg [55:0] cache_data [0:1023];
     
-    reg [1:0] state,next_state;
+    reg [1:0] state=2'b00;
+    reg [1:0] next_state=2'b00;
+    reg [1:0] pre_state=2'b00;
     parameter IDLE=0;
     parameter CompareTag=1;
     parameter Allocate=2;
@@ -69,6 +74,10 @@ input mem_ready //mem done the work, i.e. mem aviliable when mem_ready=0
     wire [1:0] offset;
     wire [7:0] index;
     wire [21:0] tag;
+    reg [31:0] ALUOutMW;
+    wire [1:0] offsetMW;
+    wire [7:0] indexMW;
+    wire [21:0] tagMW;
     parameter V=55;
     parameter D=54;
     parameter TagMSB=53;
@@ -79,7 +88,18 @@ input mem_ready //mem done the work, i.e. mem aviliable when mem_ready=0
     assign offset=cpu_req_addr[1:0];
     assign index=cpu_req_addr[9:2];
     assign tag=cpu_req_addr[31:10];
+    //------------------
+    assign offsetMW=ALUOutMW[1:0];
+    assign indexMW=ALUOutMW[9:2];
+    assign tagMW=ALUOutMW[31:10];
+
     
+    assign current_state=(state==2'b00 );
+//    || (state==2'b01&&next_state==2'b00) || (state==2'b01&&next_state==2'b01)
+    always @(posedge CLK) begin
+        ALUOutMW=ALUOutW;
+        pre_state=state;
+    end
     integer i;
      //initialize cache
      initial begin
@@ -88,32 +108,27 @@ input mem_ready //mem done the work, i.e. mem aviliable when mem_ready=0
     
     always @(posedge CLK or posedge RESET) begin 
         if (RESET)
+        begin
             state<=IDLE;
+            
+        end
         else begin
             state<=next_state;
         end    
     end
     
-    reg Cache_Stall1;
-    assign Cache_Stall=Cache_Stall1;
-    always @(*) begin
-        if (RESET)
-            Cache_Stall1=1'b0;
-        else if (state==IDLE)
-            Cache_Stall1=1'b1;
-        else 
-            Cache_Stall1=1'b0;
-    end
     
     //state machine
     always @(*) begin
         case (state)
-            IDLE:if(cpu_req_valid)
+            IDLE:if(cpu_req_valid&&!RESET )
                     next_state=CompareTag;
                   else
                     next_state=IDLE;
             CompareTag:if(hit) 
                             next_state=IDLE;
+//                        else if (hit&&cpu_req_valid)&&!cpu_req_valid
+//                            next_state=CompareTag;
                         else if (cache_data[24*index+way][V:D]==2'b11) //the block is valid and dirty, however miss, writeback needed 
                             next_state=WriteBack;
                         else
@@ -133,35 +148,80 @@ input mem_ready //mem done the work, i.e. mem aviliable when mem_ready=0
     
     //hit in the first way; hit1
     always @(*) begin
-        if(state==CompareTag)
+        if(state==CompareTag&&pre_state==IDLE)
+        begin
             if(cache_data[4*index][V]&&cache_data[4*index][TagMSB:TagLSB]==tag)
                 hit1=1;
             else 
                 hit1=0;
+        end
+
+        else if (state==CompareTag&&pre_state==Allocate)
+        begin
+            if(cache_data[4*indexMW][V]&&cache_data[4*indexMW][TagMSB:TagLSB]==tagMW)
+                hit1=1;
+            else 
+                hit1=0;            
+        end
+        else
+            hit1=1'b0;
     end
     //hit in the second way; hit2
     always @(*) begin
-        if(state==CompareTag)
+        if(state==CompareTag&&!mem_ready)
+        begin
             if(cache_data[4*index+1][V]&&cache_data[4*index+1][TagMSB:TagLSB]==tag)
                 hit2=1;
             else 
                 hit2=0;
-    end    
+        end
+        else if (state==CompareTag&&mem_ready)
+        begin
+            if(cache_data[4*indexMW+1][V]&&cache_data[4*indexMW+1][TagMSB:TagLSB]==tagMW)
+                hit2=1;
+            else 
+                hit2=0;            
+        end
+        else 
+            hit2=0;    
+    end  
     //hit in the third way; hit3
     always @(*) begin
-        if(state==CompareTag)
+        if(state==CompareTag&&!mem_ready)
+        begin
             if(cache_data[4*index+2][V]&&cache_data[4*index+2][TagMSB:TagLSB]==tag)
                 hit3=1;
             else 
                 hit3=0;
+        end
+        else if (state==CompareTag&&mem_ready)
+        begin
+            if(cache_data[4*indexMW+2][V]&&cache_data[4*indexMW+2][TagMSB:TagLSB]==tagMW)
+                hit3=1;
+            else 
+                hit3=0;            
+        end
+        else 
+            hit3=0;    
     end   
     //hit in the fourth way; hit4
     always @(*) begin
-        if(state==CompareTag)
+        if(state==CompareTag&&!mem_ready)
+        begin
             if(cache_data[4*index+3][V]&&cache_data[4*index+3][TagMSB:TagLSB]==tag)
                 hit4=1;
             else 
                 hit4=0;
+        end
+        else if (state==CompareTag&&mem_ready)
+        begin
+            if(cache_data[4*indexMW+3][V]&&cache_data[4*indexMW+3][TagMSB:TagLSB]==tagMW)
+                hit4=1;
+            else 
+                hit4=0;            
+        end
+        else
+            hit4=0;    
     end    
     
     //hit
@@ -242,23 +302,18 @@ input mem_ready //mem done the work, i.e. mem aviliable when mem_ready=0
     
     
     
+    always @(posedge CLK) begin
+        
+    end
+    
     //Allocate and WriteBcak
     always @(posedge CLK) begin
         if (state==Allocate) 
             if(!mem_ready)
             begin
-                if((PC>= 32'h00000000) && (PC <= 32'h000001FC))
-                begin
-                    mem_req_valid1<=1'b1;
-                    mem_req_addr1<={PC[31:2],2'b00}; // transfer the addr to the mem to get the data in INSTR_MEM
-                    mem_req_rw1<=1'b0;
-                end
-                else
-                begin
-                    mem_req_valid1<=1'b1;
-                    mem_req_addr1<={cpu_req_addr[31:2],2'b00}; // transfer the addr to the mem to get the data in VAR_DATA or CONST_MEM
-                    mem_req_rw1<=1'b0;
-                end
+                mem_req_valid1<=1'b1;
+                mem_req_addr1<={cpu_req_addr[31:2],2'b00}; // transfer the addr to the mem to get the data in VAR_DATA or CONST_MEM
+                mem_req_rw1<=1'b0;
             end
             else
             begin

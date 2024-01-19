@@ -35,6 +35,7 @@ module State_register3(
     input [3:0]  ALUFlagsE,
     input Float_startE,
     input [31:0] FloatoutE,
+    input Cache_Stall,
 
     
     output reg [31:0] WriteDataM,
@@ -53,6 +54,7 @@ module State_register3(
        output reg [3:0]  ALUFlagsM   
     );
 always @(posedge CLK) begin
+     if(!Cache_Stall) begin
      ALUResultM<=ALUResultE;
      WriteDataM<=WriteDataE;
      WA3M<=WA3E;
@@ -67,5 +69,22 @@ always @(posedge CLK) begin
      FloatoutM<=FloatoutE;
       // list 3
          ALUFlagsM<=ALUFlagsE;
+     end
+     else begin
+     ALUResultM<=ALUResultM;
+     WriteDataM<=WriteDataM;
+     WA3M<=WA3M;
+     RegWriteM<=RegWriteM;
+     MemWriteM<=MemWriteM;
+     MemtoRegM<=MemtoRegM;
+     RA2M<=RA2M;
+     MvalidM<=MvalidM;
+     MWA3M<=MWA3M;
+     WResultM<=WResultM;
+     Float_startM<=Float_startM;
+     FloatoutM<=FloatoutM;
+      // list 3
+         ALUFlagsM<=ALUFlagsM;     
+     end
 end     
 endmodule

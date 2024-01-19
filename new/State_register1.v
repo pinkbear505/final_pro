@@ -6,13 +6,14 @@ module State_register1(
     input StallD,
     input FlashD,
     input Mstall,
+    input Cache_Stall,
     
     output reg [31:0] InstrD
     );
 always @(posedge CLK) begin
     if(FlashD)
         InstrD<=0;
-    else if(StallD || Mstall)
+    else if(StallD || Mstall || Cache_Stall)
         InstrD<=InstrD;
     else
         InstrD<=InstrF;

@@ -21,24 +21,25 @@ module Wrapper
 //----------------------------------------------------------------
 wire[31:0] PC ;
 wire[31:0] Instr ;
-reg [31:0] Instr1;
-assign Instr=Instr1;
-reg[31:0] ReadData ;
+wire[31:0] ReadData ;
 wire MemWriteM ;
 wire[31:0] ALUResult ;
 wire[31:0] WriteData ;
 wire stall;
 wire op;
+wire [31:0] ALUOutW;
 //----------------------------------------------------------------
 // cache signals
 //----------------------------------------------------------------
 wire cpu_req_valid;
 wire cpu_req_rw;
-assign cpu_req_rw=MemWriteM;
+wire MemWriteW;
+assign cpu_req_rw=MemWriteW;
 wire [31:0] cpu_data_read;
-reg [31:0] cpu_data_read1;
-assign cpu_data_read=cpu_data_read1;
 wire cpu_ready;
+
+wire current_state;
+
 
 wire [31:0] cpu_req_addr;
 assign cpu_req_addr=ALUResult;
@@ -66,35 +67,37 @@ wire Data_Mem;
 //----------------------------------------------------------------
 wire [31:0] ReadData_IO;
 
-////----------------------------------------------------------------
-//// Memory declaration
-////-----------------------------------------------------------------
-//reg [31:0] INSTR_MEM		[0:127]; // instruction memory
+//----------------------------------------------------------------
+// Memory declaration
+//-----------------------------------------------------------------
+reg [31:0] INSTR_MEM		[0:127]; // instruction memory
 //reg [31:0] DATA_CONST_MEM	[0:127]; // data (constant) memory
 //reg [31:0] DATA_VAR_MEM     [0:127]; // data (variable) memory
-//integer i;
+integer i;
 
 
-////----------------------------------------------------------------
-//// Instruction Memory
-////----------------------------------------------------------------
-//initial begin
-//			INSTR_MEM[0] = 32'hE59F120C; 
-//			INSTR_MEM[1] = 32'hE59F2200; 
-//			INSTR_MEM[2] = 32'hE59F3200; 
-//			INSTR_MEM[3] = 32'hE59FB208; 
-//			INSTR_MEM[4] = 32'hE59FC200; 
-//			INSTR_MEM[5] = 32'hE0080291; 
-//			INSTR_MEM[6] = 32'hE0815002; 
-//			INSTR_MEM[7] = 32'hE0090293; 
-//			INSTR_MEM[8] = 32'hE0816002; 
-//			INSTR_MEM[9] = 32'hE0817002; 
-//			INSTR_MEM[10] = 32'hE0814002; 
-//			INSTR_MEM[11] = 32'hE081A002; 
-//			for(i = 12; i < 128; i = i+1) begin 
-//				INSTR_MEM[i] = 32'h0; 
-//			end
-//end
+//----------------------------------------------------------------
+// Instruction Memory
+//----------------------------------------------------------------
+initial begin
+			INSTR_MEM[0] = 32'hE59F120C; 
+			INSTR_MEM[1] = 32'hE59F2200; 
+			INSTR_MEM[2] = 32'hE59F3200; 
+			INSTR_MEM[3] = 32'hE59FB208; 
+			INSTR_MEM[4] = 32'hE59FC200; 
+			INSTR_MEM[5] = 32'hE0080291; 
+			INSTR_MEM[6] = 32'hE0815002; 
+			INSTR_MEM[7] = 32'hE0090293; 
+			INSTR_MEM[8] = 32'hE0816002; 
+			INSTR_MEM[9] = 32'hE0817002; 
+			INSTR_MEM[10] = 32'hE0814002; 
+			INSTR_MEM[11] = 32'hE081A002; 
+			INSTR_MEM[12] = 32'hE58C2008;
+			INSTR_MEM[13] = 32'hE59C2008;
+			for(i = 14; i < 128; i = i+1) begin 
+				INSTR_MEM[i] = 32'h0; 
+			end
+end
 
 ////----------------------------------------------------------------
 //// Data (Constant) Memory
@@ -132,11 +135,15 @@ ARM ARM1(
 	RESET,
 	Instr,
 	ReadData,
+	current_state,
 	MemWriteM,
+	MemWriteW,
 	PC,
 	ALUResult,
 	WriteData,
-	cpu_req_valid
+	cpu_req_valid,
+	ALUOutW
+//	Cache_Stall
 );
 
 ////----------------------------------------------------------------
@@ -159,6 +166,7 @@ ARM ARM1(
 //	ReadData <= 32'h0 ; 
 //end
 
+assign ReadData=cpu_data_read;
 ////----------------------------------------------------------------
 //// Data memory read 2
 ////----------------------------------------------------------------
@@ -172,12 +180,12 @@ ARM ARM1(
 //        DATA_VAR_MEM[ALUResult[8:2]] <= WriteData ;
 //end
 
-////----------------------------------------------------------------
-//// Instruction memory read
-////----------------------------------------------------------------
-//assign Instr = ( (PC >= 32'h00000000) && (PC <= 32'h000001FC) ) ? // To check if address is in the valid range, assuming 128 word memory. Also helps minimize warnings
-//                 INSTR_MEM[PC[8:2]] : 32'h00000000 ; 
-////0000_0000_0000--0001_1111_1100 instr
+//----------------------------------------------------------------
+// Instruction memory read
+//----------------------------------------------------------------
+assign Instr = ( (PC >= 32'h00000000) && (PC <= 32'h000001FC) ) ? // To check if address is in the valid range, assuming 128 word memory. Also helps minimize warnings
+                 INSTR_MEM[PC[8:2]] : 32'h00000000 ; 
+//0000_0000_0000--0001_1111_1100 instr
 
 
 //----------------------------------------------------------------
@@ -208,28 +216,29 @@ end
 
 
 
-always @(*) begin
-    if(Instr_Mem)
-        Instr1=cpu_data_read1;
-    else if(Data_Mem)
-        ReadData=cpu_data_read1;
-    else 
-        Instr1=Instr1;
-        ReadData=ReadData; 
+//always @(*) begin
+//    if(Instr_Mem)
+//        Instr1=cpu_data_read1;
+//    else if(Data_Mem)
+//        ReadData=cpu_data_read1;
+//    else 
+//        Instr1=Instr1;
+//        ReadData=ReadData; 
 
-end
+//end
 
 associative_cache associative_cache1(
 	CLK,
 	RESET,
     //between CPU and cache
-    PC,
     cpu_req_addr, //ALUResult, PC
     cpu_req_valid,
     cpu_req_rw,
     cpu_data_write, //store instruction, WriteData
-    cpu_data_read, //three conditions, INSTR, DATA_VAR, DATA_CONST
+    cpu_data_read, //two conditions,  DATA_VAR, DATA_CONST
     cpu_ready,
+    current_state,
+    ALUOutW,
     
     //between cache and mem
     mem_req_addr, //addr mem achieve
@@ -254,10 +263,8 @@ Mem Mem1 (
     mem_req_valid,
     mem_data_write,
     mem_data_read,
-    ReadData_IO,
     mem_ready,
-    Instr_Mem,
-    Data_Mem
+    ReadData_IO
 );
 
 

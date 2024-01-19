@@ -26,7 +26,7 @@ end
 always @(posedge CLK or posedge Reset) begin
     if(Reset)
         current_PC<=0;
-    else if (StallF || Mstall||Cache_Stall)
+    else if (StallF || Mstall || Cache_Stall)
         current_PC<=current_PC;
     else begin
         current_PC<=next_PC;

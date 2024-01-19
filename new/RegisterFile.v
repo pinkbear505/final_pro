@@ -16,6 +16,10 @@ module RegisterFile(
         
     // declare RegBank
     reg [31:0] RegBank[0:14] ;
+    reg [3:0] A3M;
+    always @(posedge CLK) begin
+        A3M=A3;
+    end
  //   reg [31:0] FloatBank[0:14] ;
 assign RD1=  RA1D==15 ? R15:RegBank[RA1D];////////////////浮点�?
 assign RD2=  RA2D==15 ? R15:RegBank[RA2D];////////////////浮点�?

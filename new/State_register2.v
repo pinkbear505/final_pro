@@ -21,6 +21,7 @@ module State_register2(
     input StartD,
     input MCycleOpD,
     input Mstall,
+    input Cache_Stall,
     input [3:0] MWA3D,
     input Float_startD,
     input [31:0] FloatoutD,
@@ -84,7 +85,7 @@ always @(posedge CLK) begin
         eorE<=0;
         MBME<=2'b00;
     end
-    else if(Mstall) begin
+    else if(Mstall || Cache_Stall) begin
     SrcAE<=SrcAE;
     SrcBE0<=SrcBE0;
     WA3E<=WA3E;
